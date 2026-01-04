@@ -33,8 +33,11 @@ The generated code follows embedded programming best practices:
 •	Non-Blocking Management: Extensive use of millis() for blinking and the OUT 1 pulse avoids delay(), keeping the system responsive.
 5. Hardware Specifications
 •	Microcontroller: Arduino Uno, Nano, or compatibles (ATmega328P).
+
+![original_counter](https://github.com/user-attachments/assets/176b96c6-58f8-44b1-aa3f-754932cb71e7)
+
 •	Display: 4-digit TM1637 module with central dots (colon).
 •	Passive Components: Pull-up resistors for input sensors.
-6. Conclusion
+7. Conclusion
 The LM8529 emulator represents a robust solution for the functional recovery of vintage equipment. The combination of temporal precision via interrupts and logical fidelity to segment suppression makes it a perfect replacement for the original IC.
 
