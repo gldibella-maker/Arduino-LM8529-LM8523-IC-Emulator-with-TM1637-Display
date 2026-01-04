@@ -1,4 +1,4 @@
-Arduino LM8529 IC Emulator with TM1637 Display
+Arduino LM8529 IC Emulator with TM1637 Display - AKAI GX-625
 1. Introduction and Project Scope
 This project addresses the need to replace or emulate the functional logic of the LM8529 integrated circuit, a legacy controller originally used in audio/video equipment (such as tape recorders) for revolution counting and timing functions. The goal is to provide a software tool (an Arduino sketch generator) that allows technicians and enthusiasts to reconstruct the behavior of the original chip using an Arduino microcontroller and a 7-segment LED display driven by the TM1637.
 2. Functional Analysis
