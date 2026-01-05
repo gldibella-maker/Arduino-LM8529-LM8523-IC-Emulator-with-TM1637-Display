@@ -6,7 +6,6 @@ This project addresses the need to replace or emulate the functional logic of th
 3. Functional Analysis
 The emulator implements two primary operating modes, selectable via a dedicated input (STW/TAPE):
 	A. Tape Counter Mode
-
 		•	Counting Logic: The system accepts pulses from the tape sensor with a 5:1 scale ratio (5 input pulses correspond to 1 unit on the display).
 
 		•	Direction: Supports incremental and decremental counting via the UP_DOWN pin.
