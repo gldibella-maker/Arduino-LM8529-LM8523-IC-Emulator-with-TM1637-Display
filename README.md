@@ -53,4 +53,4 @@ The LM8529 emulator represents a robust solution for the functional recovery of 
 
 <img width="500" height="500" alt="immagine" src="https://github.com/user-attachments/assets/f188d3e4-877d-4cee-9c1a-9a722ea4e93c" />
 
-![DIAGRAM](https://github.com/user-attachments/assets/ae31da69-70e4-407f-b056-88b839068b3b)
+
