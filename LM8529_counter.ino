@@ -1,15 +1,16 @@
 /*
  * LM8529 Emulator for Arduino (TM1637 LED Edition)
- * REVISIONE 5: Ripristino Active HIGH per ingressi di controllo.
+ * REVISIONE 6: Debounce 2ms e Conteggio Background
+ * 
+ * LOGICA CONTEGGIO (Fig. 10):
+ * - TAPEPULSE (Pin 2): Interrupt RISING con debounce di 2ms.
+ * - Il conteggio prosegue in background anche se STW_TAPE è attivo.
  * 
  * LOGICA INGRESSI (Active HIGH):
- * - RESET, STW_TAPE, START_STOP, MEMORY_STOP: HIGH = Attivo.
- * - Nota: I pin sono configurati come INPUT. Assicurarsi di avere 
- *   resistenze di pull-down esterne se i segnali sono flottanti.
+ * - RESET, STW_TAPE, START_STOP, MEMORY_STOP: attivi se HIGH (5V).
  * 
- * LOGICA SEGNALI TAPE (Fig. 10):
- * - TAPEPULSE: Fronte di salita (RISING) su Pin 2 (Interrupt).
- * - UPDOWN: Campionato istantaneamente nell'ISR. HIGH=UP, LOW=DOWN.
+ * LOGICA USCITE (Active LOW):
+ * - OUT1, ZERO, TARGET, 29, SEG_B, SEG_C sono attive a livello LOW.
  */
 
 #include <TM1637Display.h>
@@ -49,15 +50,15 @@ const uint8_t SEGMENT_MAP[] = {
 volatile long tapeCounter = 0;
 volatile int pulseSubCount = 0;
 volatile long stwCounter = 0; 
+volatile unsigned long lastPulseMillis = 0;
 
 long storedN = -1;
-bool lastMemStopInput = LOW; 
+bool lastMemStopInput = LOW;
 bool out1Active = false;
 unsigned long out1StartTime = 0;
 long lastMatchedValue = -1;
 
 void setup() {
-  // Configurazione Ingressi: INPUT semplice (Richiede Pull-down esterni)
   pinMode(PIN_UP_DOWN, INPUT);
   pinMode(PIN_TAPE_PULSE, INPUT);
   pinMode(PIN_STW_TAPE, INPUT);
@@ -72,7 +73,6 @@ void setup() {
   pinMode(PIN_SEG_B_D1, OUTPUT);
   pinMode(PIN_SEG_C_D1, OUTPUT);
 
-  // Inizializzazione Uscite Active LOW (Inattive = HIGH)
   digitalWrite(PIN_OUT_ZERO, HIGH);
   digitalWrite(PIN_OUT1, HIGH);
   digitalWrite(PIN_OUT_TARGET, HIGH);
@@ -83,7 +83,7 @@ void setup() {
   display.setBrightness(0x0f);
   display.clear();
 
-  // Configurazione Timer 1 (100Hz per cronometro)
+  // Timer 1: 100Hz (10ms) per il cronometro
   cli();
   TCCR1A = 0; TCCR1B = 0; TCNT1 = 0; 
   OCR1A = 2499; 
@@ -91,24 +91,24 @@ void setup() {
   TIMSK1 |= (1 << OCIE1A); 
   sei();
 
-  // Sincronizzazione Fig. 10: Interrupt su Fronte di Salita
+  // Interrupt su fronte di SALITA (Fig. 10)
   attachInterrupt(digitalPinToInterrupt(PIN_TAPE_PULSE), tapePulseISR, RISING);
 }
 
-// ISR Cronometro: Incrementa se START_STOP è HIGH
 ISR(TIMER1_COMPA_vect) {
   if (digitalRead(PIN_START_STOP) == HIGH) stwCounter++;
 }
 
-// ISR Nastro: Cattura direzione al fronte di salita di TAPEPULSE
 void tapePulseISR() {
-  // Conteggio attivo se NON in modalità Stopwatch (STW_TAPE == LOW)
-  if (digitalRead(PIN_STW_TAPE) == LOW) {
-    // Sincronizzazione Fig. 10: UPDOWN HIGH = UP, LOW = DOWN
+  unsigned long now = millis();
+  // Debounce 2ms
+  if (now - lastPulseMillis >= 2) {
+    lastPulseMillis = now;
+    // Conteggio sempre attivo (Background)
     bool dirUp = (digitalRead(PIN_UP_DOWN) == HIGH);
     
     pulseSubCount++;
-    if (pulseSubCount >= 1) { // Divisore 2:1
+    if (pulseSubCount >= 1) { // Divisore 5:1
       pulseSubCount = 0;
       if (dirUp) tapeCounter++;
       else tapeCounter--;
@@ -120,13 +120,12 @@ void tapePulseISR() {
 }
 
 void loop() {
-  // Lettura segnali Active HIGH
   bool isStwMode = (digitalRead(PIN_STW_TAPE) == HIGH);
   bool isResetAct = (digitalRead(PIN_RESET) == HIGH);
   bool currentMemStopInput = (digitalRead(PIN_MEMORY_STOP) == HIGH);
 
-  long currentTapeValue;
-  noInterrupts(); currentTapeValue = tapeCounter; interrupts();
+  long currentTapeVal; 
+  noInterrupts(); currentTapeVal = tapeCounter; interrupts();
 
   if (isResetAct) {
     if (isStwMode) { 
@@ -134,67 +133,64 @@ void loop() {
     } else { 
       noInterrupts(); tapeCounter = 0; pulseSubCount = 0; interrupts(); 
       storedN = -1; 
-      currentTapeValue = 0;
+      currentTapeVal = 0;
     }
   }
 
-  // Cattura memoria su fronte di salita (Active HIGH)
+  // Cattura memoria su fronte di salita
   if (currentMemStopInput == HIGH && lastMemStopInput == LOW) {
-    storedN = currentTapeValue;
+    storedN = currentTapeVal;
   }
   lastMemStopInput = currentMemStopInput;
 
-  // Gestione OUT 1 (Active LOW per 300ms al match)
-  if (!isStwMode && storedN != -1 && currentTapeValue == storedN) {
-    if (!out1Active && currentTapeValue != lastMatchedValue) {
-      digitalWrite(PIN_OUT1, LOW); // ATTIVA USCITA
+  // OUT 1 (Active LOW al match)
+  if (!isStwMode && storedN != -1 && currentTapeVal == storedN) {
+    if (!out1Active && currentTapeVal != lastMatchedValue) {
+      digitalWrite(PIN_OUT1, LOW); 
       out1Active = true;
       out1StartTime = millis();
-      lastMatchedValue = currentTapeValue;
+      lastMatchedValue = currentTapeVal;
     }
   } else {
-    if (currentTapeValue != storedN) lastMatchedValue = -1;
+    if (currentTapeVal != storedN) lastMatchedValue = -1;
   }
+  
   if (out1Active && (millis() - out1StartTime >= 300)) {
-    digitalWrite(PIN_OUT1, HIGH); // DISATTIVA USCITA
+    digitalWrite(PIN_OUT1, HIGH); 
     out1Active = false;
   }
 
-  updateDisplayAndOutputs(isStwMode, currentTapeValue);
+  updateDisplay(isStwMode, currentTapeVal);
 }
 
-void updateDisplayAndOutputs(bool isStwMode, long currentTape) {
-  int digit1Val = 0;
-  bool suppressed = false;
+void updateDisplay(bool isStwMode, long currentTapeVal) {
+  int digit1Value = 0;
+  bool isDigit1Suppressed = false;
 
   if (isStwMode) {
     long currentStw;
     noInterrupts(); currentStw = stwCounter; interrupts();
     int min = (currentStw / 6000) % 100;
     int sec = (currentStw / 100) % 60;
-    digit1Val = (min / 10) % 10;
-    
-    // Colon lampeggiante se attivo, fisso se fermo
+    digit1Value = (min / 10) % 10;
     bool running = (digitalRead(PIN_START_STOP) == HIGH);
     uint8_t dots = (running && (millis() / 500) % 2 != 0) ? 0 : 0b01000000;
     display.showNumberDecEx(min * 100 + sec, dots, true);
   } else {
-    digit1Val = (currentTape / 1000) % 10;
-    suppressed = (currentTape < 1000);
-    display.showNumberDec(currentTape, false);
+    digit1Value = (currentTapeVal / 1000) % 10;
+    isDigit1Suppressed = (currentTapeVal < 1000);
+    display.showNumberDec(currentTapeVal, false);
   }
 
-  // Uscite Segmenti Digit 1 (Invertite: LOW=Acceso)
-  if (suppressed) {
+  if (isDigit1Suppressed) {
     digitalWrite(PIN_SEG_B_D1, HIGH);
     digitalWrite(PIN_SEG_C_D1, HIGH);
   } else {
-    digitalWrite(PIN_SEG_B_D1, (SEGMENT_MAP[digit1Val] & 0b00000010) ? LOW : HIGH);
-    digitalWrite(PIN_SEG_C_D1, (SEGMENT_MAP[digit1Val] & 0b00000100) ? LOW : HIGH);
+    digitalWrite(PIN_SEG_B_D1, (SEGMENT_MAP[digit1Value] & 0b00000010) ? LOW : HIGH);
+    digitalWrite(PIN_SEG_C_D1, (SEGMENT_MAP[digit1Value] & 0b00000100) ? LOW : HIGH);
   }
 
-  // Uscite di stato fisse (Active LOW)
-  digitalWrite(PIN_OUT_ZERO, (!isStwMode && currentTape == 0) ? LOW : HIGH);
-  digitalWrite(PIN_OUT_TARGET, (!isStwMode && currentTape == 9) ? LOW : HIGH);
-  digitalWrite(PIN_OUT_29, (!isStwMode && currentTape == 29) ? LOW : HIGH);
+  digitalWrite(PIN_OUT_ZERO, (!isStwMode && currentTapeVal == 0) ? LOW : HIGH);
+  digitalWrite(PIN_OUT_TARGET, (!isStwMode && currentTapeVal <= 9) ? LOW : HIGH);
+  digitalWrite(PIN_OUT_29, (!isStwMode && currentTapeVal <= 29) ? LOW : HIGH);
 }
