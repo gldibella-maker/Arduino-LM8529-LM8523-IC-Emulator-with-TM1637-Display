@@ -2,7 +2,7 @@
  * LM8529 Emulator for Arduino (TM1637 LED Edition)
  * REVISIONE 6: Debounce 2ms e Conteggio Background
  * 
- * LOGICA CONTEGGIO (Fig. 10):
+ * LOGICA CONTEGGIO:
  * - TAPEPULSE (Pin 2): Interrupt RISING con debounce di 2ms.
  * - Il conteggio prosegue in background anche se STW_TAPE è attivo.
  * 
@@ -194,4 +194,5 @@ void updateDisplay(bool isStwMode, long currentTapeVal) {
   digitalWrite(PIN_OUT_TARGET, (!isStwMode && currentTapeVal <= 9) ? LOW : HIGH);
   digitalWrite(PIN_OUT_29, (!isStwMode && currentTapeVal <= 29) ? LOW : HIGH);
 }
+
 
