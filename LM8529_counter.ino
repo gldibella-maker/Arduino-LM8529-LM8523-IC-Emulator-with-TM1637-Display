@@ -108,7 +108,7 @@ void tapePulseISR() {
     bool dirUp = (digitalRead(PIN_UP_DOWN) == HIGH);
     
     pulseSubCount++;
-    if (pulseSubCount >= 1) { // Divisore 5:1
+    if (pulseSubCount >= 1) { // Divisore 1:1
       pulseSubCount = 0;
       if (dirUp) tapeCounter++;
       else tapeCounter--;
@@ -194,3 +194,4 @@ void updateDisplay(bool isStwMode, long currentTapeVal) {
   digitalWrite(PIN_OUT_TARGET, (!isStwMode && currentTapeVal <= 9) ? LOW : HIGH);
   digitalWrite(PIN_OUT_29, (!isStwMode && currentTapeVal <= 29) ? LOW : HIGH);
 }
+
